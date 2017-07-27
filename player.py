@@ -75,23 +75,26 @@ class PlayerPiano(object):
 
     def metronome(self):
         while True:
-            self.tick += 1
-            self.beat_num = self.tick % 16
-            if self.tick % 16 == 0:
-                # half note
-                pass
-            if (self.tick % 16) % 4 == 0:
-                # quarter note
-                logger.info(self.beat_num)
-            elif (self.tick % 16) % 2 == 0:
-                # eighth note
-                pass
-            elif (self.tick % 16) % 1 == 0:
-                # sixteenth note
-                pass
-            notes = self.response(self.tick)
-            logger.info("tick {}: {}".format(self.tick, notes))
-            time.sleep(60 / self.bpm / 4 * 0.9975)
+        	self.tick_tock()
+
+    def tick_tock(self):
+        self.tick += 1
+        self.beat_num = self.tick % 16
+        if self.tick % 16 == 0:
+            # half note
+            pass
+        if (self.tick % 16) % 4 == 0:
+            # quarter note
+            logger.info(self.beat_num)
+        elif (self.tick % 16) % 2 == 0:
+            # eighth note
+            pass
+        elif (self.tick % 16) % 1 == 0:
+            # sixteenth note
+            pass
+        notes = self.response(self.tick)
+        logger.info("tick {}: {}".format(self.tick, notes))
+        time.sleep(60 / self.bpm / 4 * 0.9975)
 
 
 class Echo(PlayerPiano):
