@@ -1,6 +1,7 @@
 import operator
 import os.path
 import random
+import collections
 
 import json
 
@@ -57,7 +58,27 @@ def get_chord(chord_string, root='C'):
     return notes
 
 
-def notes_to_chord(note_array, enforce_root=False):
+def major_scale(key):
+    diff = c_chromatic_scale.index(key) - c_chromatic_scale.index('C')
+    major_scale = []
+    for note in c_major_scale:
+        major_scale.append(c_chromatic_scale[
+                           c_chromatic_scale.index(note) + diff])
+    return major_scale[:7]
+
+
+def percent_in_key(note_array, key=''):
+    if key == '':
+        return 100
+    major_scale_notes = major_scale(key)
+    num = 0
+    for note in note_array:
+        if note in major_scale_notes:
+            num += 1
+    return float(num) / float(len(note_array))
+
+
+def notes_to_chord(note_array, enforce_root=False, key=''):
     """Get a note string like
     ['C','E','G','Bb']
     And return the chord
@@ -65,9 +86,13 @@ def notes_to_chord(note_array, enforce_root=False):
 
     Optional: enforce root
     """
-    notes = note_array
+    notes = []
+    for note in collections.Counter(note_array).most_common(5):
+        notes.append(note[0])
     matches = {}
     for c in all_chords:
+        if percent_in_key(all_chords[c], key) < 0.75:
+            continue
         matches[c] = len(set(all_chords[c]) & set(notes))
         if len(set(all_chords[c])) > len(set(notes)):
             matches[c] = matches[c] / len(set(all_chords[c]))

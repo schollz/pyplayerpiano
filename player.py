@@ -137,9 +137,10 @@ class PlayerPiano(object):
         if (self.tick % 16) % 4 == 0:
             # quarter note
             logger.info(self.beat_num)
+            play_notes([(36, 20, 0, True)])
         elif (self.tick % 16) % 2 == 0:
             # eighth note
-            pass
+            play_notes([(36, 20, 0, False)])
         elif (self.tick % 16) % 1 == 0:
             # sixteenth note
             pass
@@ -204,8 +205,10 @@ class Echo(PlayerPiano):
             if absolute_beat < current_beat:
                 break
             self._queue_note(absolute_beat + self.delay,
-                             pitch, velocity, channel, True)
-            self._queue_note(absolute_beat + self.delay + self.length,
+                             pitch, int(velocity * .8), channel, True)
+            self._queue_note(absolute_beat + self.delay + self.delay,
+                             pitch, int(velocity * .6), channel, True)
+            self._queue_note(absolute_beat + self.delay * 2 + self.length,
                              pitch, velocity, channel, False)
 
 
@@ -241,12 +244,12 @@ class LastChord(PlayerPiano):
         notes = []
         for pitch in sorted(pitches):
             notes.append(midi_to_note(pitch))
-        chord = notes_to_chord(notes)
+        chord = notes_to_chord(notes, key=self.key)
         notes_in_chord = chord_to_notes(chord, voicing=True)
-        midi_notes = get_midi_notes(notes_in_chord)
+        midi_notes = get_midi_notes(notes_in_chord, register=4)
         did_queue = False
         velocities = list(sorted(velocities))
-        mean_velocity = velocities[int(len(velocities) / 2)]
+        mean_velocity = int(float(velocities[int(len(velocities) / 2)]) * .7)
         for note in midi_notes:
             did_queue = self._queue_note(
                 current_absolute + start, note, int(mean_velocity), 0, True)
@@ -259,8 +262,10 @@ class LastChord(PlayerPiano):
                 logger.info('1: {} => {}'.format(notes, chord))
 
 # random.seed(1)
-c = LastChord('G')
+c = LastChord('C', bpm=120)
 c.init()
+# c = Echo('C', beats_per_measure=16, bpm=120)
+# c.init(delay=4)
 c.start()
 # time.sleep(2)
 # c.add_note(2, 10, 100, 0, True)
