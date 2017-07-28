@@ -5,16 +5,16 @@ import random
 import json
 
 
-
 def generate_all_chords():
     all_chords = {}
-    for c in chords:
-    # for c in chord_types['simple']:
+    # for c in chords:
+    for c in chord_types['simple']:
         for note in c_chromatic_scale:
             all_chords[note + c] = get_chord(chords[c], root=note)
 
     with open('data/all_chords.json', 'w') as f:
         f.write(json.dumps(all_chords, indent=2))
+
 
 def get_midi_notes(notes, register=4):
     """Get notes like
@@ -26,13 +26,14 @@ def get_midi_notes(notes, register=4):
     Optional: Change register
     """
     midi_notes = []
-    for i,note in enumerate(notes):
-    	midi_note = register*12 +  c_chromatic_scale.index(note)
-    	if i > 0:
-    		while midi_note < midi_notes[i-1]:
-	    		midi_note += 12
-    	midi_notes.append(midi_note)
+    for i, note in enumerate(notes):
+        midi_note = register * 12 + c_chromatic_scale.index(note)
+        if i > 0:
+            while midi_note < midi_notes[i - 1]:
+                midi_note += 12
+        midi_notes.append(midi_note)
     return midi_notes
+
 
 def get_chord(chord_string, root='C'):
     """Get a chord string like
@@ -54,6 +55,7 @@ def get_chord(chord_string, root='C'):
             num_chro += c_chromatic_scale.index(root)
         notes.append(c_chromatic_scale[num_chro])
     return notes
+
 
 def notes_to_chord(note_array, enforce_root=False):
     """Get a note string like
@@ -87,24 +89,25 @@ def notes_to_chord(note_array, enforce_root=False):
                 best_match = match[0]
     return best_match
 
-def chord_to_notes(chord_string, voicing=False, preserve_root=True):
-	"""Get a chord like
-	C7
-	and return the notes
-	['C','E','G','Bb']
 
-	optionally you can allow different voicings
-	"""
-	chord = all_chords[chord_string]
-	if voicing:
-		if preserve_root:
-			root = chord[0]
-			other_notes = chord[1:]
-			random.shuffle(other_notes)
-			chord = [root] + other_notes
-		else:
-			random.shuffle(chord)
-	return chord
+def chord_to_notes(chord_string, voicing=False, preserve_root=True):
+    """Get a chord like
+    C7
+    and return the notes
+    ['C','E','G','Bb']
+
+    optionally you can allow different voicings
+    """
+    chord = all_chords[chord_string]
+    if voicing:
+        if preserve_root:
+            root = chord[0]
+            other_notes = chord[1:]
+            random.shuffle(other_notes)
+            chord = [root] + other_notes
+        else:
+            random.shuffle(chord)
+    return chord
 
 
 def midi_to_note(midi_value):

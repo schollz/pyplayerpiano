@@ -1,8 +1,57 @@
 import threading
 import time
+import sys
+
+import pygame
+import pygame.midi
+from pygame.locals import *
+
+pygame.init()
+pygame.midi.init()
+midi_out = pygame.midi.Output(3, 0)
+pygame.fastevent.init()
+event_get = pygame.fastevent.get
+event_post = pygame.fastevent.post
+midi_in = pygame.midi.Input(1)
+pygame.display.set_mode((100, 100))
 
 from chords import *
 from easylogging import *
+
+
+def print_device_info():
+    for i in range(pygame.midi.get_count()):
+        r = pygame.midi.get_device_info(i)
+        (interf, name, input, output, opened) = r
+
+        in_out = ""
+        if input:
+            in_out = "(input)"
+        if output:
+            in_out = "(output)"
+
+        print("%2i: interface :%s:, name :%s:, opened :%s:  %s" %
+              (i, interf, name, opened, in_out))
+
+
+def play_note(note, velocity, on, delay):
+    time.sleep(delay)
+    if on:
+        midi_out.note_on(note, velocity)
+    else:
+        midi_out.note_off(note, velocity)
+
+
+def play_notes(notes, delay=0):
+    ts = []
+    for i, note in enumerate(notes):
+        ts.append(threading.Thread(target=play_note, args=(
+            note[0], note[1], note[3], delay,)))
+
+    for t in ts:
+        t.start()
+
+print_device_info()
 
 
 class PlayerPiano(object):
@@ -21,7 +70,7 @@ class PlayerPiano(object):
         attr2 (:obj:`int`, optional): Description of `attr2`.
 
     """
-    
+
     def __init__(self, key, beats_per_measure=16, bpm=60):
         self.key = key
         self.beats_per_measure = beats_per_measure
@@ -34,6 +83,8 @@ class PlayerPiano(object):
     def start(self):
         t1 = threading.Thread(target=self.metronome)
         t1.start()
+        t2 = threading.Thread(target=self.midi_listen)
+        t2.start()
 
     def response(self, absolute_beat):
         """Emits midi notes
@@ -45,12 +96,12 @@ class PlayerPiano(object):
             notes = self.queue[absolute_beat]
         return notes
 
-    def add_note(self, absolute_beat, pitch, velocity, channel, on):
+    def add_note(self, pitch, velocity, channel, on):
         """Tell the player which notes are played when
         """
-        measure_beat = absolute_beat % self.beats_per_measure
+        measure_beat = self.tick % self.beats_per_measure
         self.notes.insert(0,
-                          (absolute_beat, measure_beat, pitch, velocity, channel, on))
+                          (self.tick, measure_beat, pitch, velocity, channel, on))
         return True
 
     def _queue_note(self, absolute_beat, pitch, velocity, channel, on):
@@ -75,7 +126,7 @@ class PlayerPiano(object):
 
     def metronome(self):
         while True:
-        	self.tick_tock()
+            self.tick_tock()
 
     def tick_tock(self):
         self.tick += 1
@@ -94,7 +145,44 @@ class PlayerPiano(object):
             pass
         notes = self.response(self.tick)
         logger.info("tick {}: {}".format(self.tick, notes))
+        play_notes(notes)
         time.sleep(60 / self.bpm / 4 * 0.9975)
+
+    def midi_listen(self):
+        going = True
+        while going:
+            events = event_get()
+            for e in events:
+                if e.type in [QUIT]:
+                    print("GOT QUIT")
+                    sys.exit(1)
+                    going = False
+                if e.type in [KEYDOWN]:
+                    print("GOT KEYDOWN")
+                    going = False
+                if e.type in [pygame.midi.MIDIIN]:
+                    note = e.data1
+                    velocity = e.data2
+                    on = e.data2 > 0
+                    print('playing', note, velocity, on)
+                    if on:
+                        self.add_note(note, velocity, 0, on)
+                    # if on:
+                    #     play_notes([note], [int(velocity / 1.5)],
+                    #                [on], delay=0.25)
+                    #     play_notes([note], [int(velocity / 1.9)],
+                    #                [on], delay=0.5)
+                    # else:
+                    #     play_notes([note], [0], [on], delay=1)
+
+            if midi_in.poll():
+                midi_events = midi_in.read(10)
+                # convert them into pygame events.
+                midi_evs = pygame.midi.midis2events(
+                    midi_events, midi_in.device_id)
+
+                for m_e in midi_evs:
+                    event_post(m_e)
 
 
 class Echo(PlayerPiano):
@@ -115,9 +203,9 @@ class Echo(PlayerPiano):
                 current_beat = absolute_beat
             if absolute_beat < current_beat:
                 break
-            self._queue_note(absolute_beat+self.delay,
+            self._queue_note(absolute_beat + self.delay,
                              pitch, velocity, channel, True)
-            self._queue_note(absolute_beat+self.delay+self.length,
+            self._queue_note(absolute_beat + self.delay + self.length,
                              pitch, velocity, channel, False)
 
 
@@ -130,6 +218,7 @@ class LastChord(PlayerPiano):
         current_beat = -1
         measure_half = -1
         pitches = []
+        velocities = []
         for t in self.notes:
             (absolute_beat, measure_beat, pitch, velocity, channel, on) = t
             if not on:
@@ -137,12 +226,18 @@ class LastChord(PlayerPiano):
             if current_beat == -1:
                 current_absolute = absolute_beat
                 current_beat = measure_beat
-                measure_half = measure_beat - self.beats_per_measure/2 > 0
-            if measure_beat != current_beat and measure_half != (measure_beat - self.beats_per_measure/2 > 0):
+                measure_half = measure_beat - self.beats_per_measure / 2 > 0
+            if measure_beat != current_beat and measure_half != (measure_beat - self.beats_per_measure / 2 > 0):
                 break
             pitches.append(pitch)
+            velocities.append(velocity)
         if len(set(pitches)) < 3:
             return
+        start = random.randint(3, 8)
+        end = random.randint(3, 8) + start
+        for i in range(current_absolute + start, current_absolute + end):
+            if i in self.queue:
+                return
         notes = []
         for pitch in sorted(pitches):
             notes.append(midi_to_note(pitch))
@@ -150,10 +245,13 @@ class LastChord(PlayerPiano):
         notes_in_chord = chord_to_notes(chord, voicing=True)
         midi_notes = get_midi_notes(notes_in_chord)
         did_queue = False
+        velocities = list(sorted(velocities))
+        mean_velocity = velocities[int(len(velocities) / 2)]
         for note in midi_notes:
             did_queue = self._queue_note(
-                current_absolute+1, note, 100, 0, True)
-            self._queue_note(current_absolute+3, note, 100, 0, False)
+                current_absolute + start, note, int(mean_velocity), 0, True)
+            self._queue_note(current_absolute + end, note,
+                             mean_velocity, 0, False)
         if did_queue:
             if measure_half:
                 logger.info('2: {} => {}'.format(notes, chord))
@@ -161,9 +259,9 @@ class LastChord(PlayerPiano):
                 logger.info('1: {} => {}'.format(notes, chord))
 
 # random.seed(1)
-# c = LastChord('G')
-# c.init()
-# c.start()
+c = LastChord('G')
+c.init()
+c.start()
 # time.sleep(2)
 # c.add_note(2, 10, 100, 0, True)
 # c.add_note(2, 12, 100, 0, True)
