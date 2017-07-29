@@ -17,6 +17,10 @@ pygame.display.set_mode((100, 100))
 
 from chords import *
 from easylogging import *
+from markov import *
+
+MAX_STATES = 64
+START_NOTE = 72
 
 
 def print_device_info():
@@ -43,13 +47,22 @@ def play_note(note, velocity, on, delay):
 
 
 def play_notes(notes, delay=0):
+    """
+    Array of notes:
+    [(pitch, velocity, channel, on)]
+    """
     ts = []
+    num_notes_to_play = 0
     for i, note in enumerate(notes):
         ts.append(threading.Thread(target=play_note, args=(
             note[0], note[1], note[3], delay,)))
-
+        if note[3]:
+            num_notes_to_play += 1
     for t in ts:
         t.start()
+
+    return num_notes_to_play > 0
+
 
 print_device_info()
 
@@ -75,16 +88,44 @@ class PlayerPiano(object):
         self.key = key
         self.beats_per_measure = beats_per_measure
         self.notes = []
+        self.states = []
+        self.state = ['0'] * MAX_STATES
+        self.plays = []  # an array of integers to play when the time comes
         self.queue = {}
         self.beat_num = 0
         self.tick = -1
         self.bpm = bpm
+        self.silence = 0
 
     def start(self):
-        t1 = threading.Thread(target=self.metronome)
-        t1.start()
-        t2 = threading.Thread(target=self.midi_listen)
-        t2.start()
+        self.t1 = threading.Thread(target=self.metronome)
+        self.t1.start()
+        self.t2 = threading.Thread(target=self.midi_listen)
+        self.t2.start()
+
+    def dump_states(self):
+        logger.info("Dumping {} states".format(len(self.states)))
+        with open('states.json', 'w') as f:
+            f.write(json.dumps(self.states))
+
+    def load_states(self, fname):
+        self.plays = json.load(open(fname, 'r'))
+
+    def play_preset(self):
+        if self.tick >= len(self.plays) or self.tick == 0:
+            return
+        state_current = list("{:b}".format(
+            self.plays[self.tick]).zfill(MAX_STATES))
+        state_previous = list("{:b}".format(
+            self.plays[self.tick - 1]).zfill(MAX_STATES))
+        notes = []
+        for i, s in enumerate(state_current):
+            if s == state_previous[i]:
+                continue
+            notes.append((i + START_NOTE, 75, 0, s == "1"))
+        if len(notes) > 0:
+            logger.debug("Playing preset notes")
+            play_notes(notes)
 
     def response(self, absolute_beat):
         """Emits midi notes
@@ -102,6 +143,15 @@ class PlayerPiano(object):
         measure_beat = self.tick % self.beats_per_measure
         self.notes.insert(0,
                           (self.tick, measure_beat, pitch, velocity, channel, on))
+        if pitch >= START_NOTE and pitch < START_NOTE + MAX_STATES:
+            note_index = pitch - START_NOTE
+            if on:
+                self.state[note_index] = "1"
+                self.silence = 0
+            else:
+                self.state[note_index] = "0"
+        if pitch == 21 and on:
+            self.dump_states()
         return True
 
     def _queue_note(self, absolute_beat, pitch, velocity, channel, on):
@@ -131,6 +181,7 @@ class PlayerPiano(object):
     def tick_tock(self):
         self.tick += 1
         self.beat_num = self.tick % 16
+        self.states.append(int(''.join(self.state), 2))
         if self.tick % 16 == 0:
             # half note
             pass
@@ -145,8 +196,14 @@ class PlayerPiano(object):
             # sixteenth note
             pass
         notes = self.response(self.tick)
-        logger.info("tick {}: {}".format(self.tick, notes))
+        if len(notes) > 0:
+            logger.info("tick {}: {}".format(self.tick, notes))
+        # Play any response notes
         play_notes(notes)
+        # Play any preset notes
+        self.play_preset()
+        logger.info('silence: {}'.format(self.silence))
+        self.silence += 1
         time.sleep(60 / self.bpm / 4 * 0.9975)
 
     def midi_listen(self):
@@ -165,16 +222,8 @@ class PlayerPiano(object):
                     note = e.data1
                     velocity = e.data2
                     on = e.data2 > 0
-                    print('playing', note, velocity, on)
-                    if on:
-                        self.add_note(note, velocity, 0, on)
-                    # if on:
-                    #     play_notes([note], [int(velocity / 1.5)],
-                    #                [on], delay=0.25)
-                    #     play_notes([note], [int(velocity / 1.9)],
-                    #                [on], delay=0.5)
-                    # else:
-                    #     play_notes([note], [0], [on], delay=1)
+                    logger.info('human {} {} {}'.format(note, velocity, on))
+                    self.add_note(note, velocity, 0, on)
 
             if midi_in.poll():
                 midi_events = midi_in.read(10)
@@ -261,9 +310,22 @@ class LastChord(PlayerPiano):
             else:
                 logger.info('1: {} => {}'.format(notes, chord))
 
+
+class Markov(PlayerPiano):
+
+    def _generate_reply(self):
+        if len(set(self.states)) > 10 and self.silence > 16:
+            logger.info('Generating song')
+            song = markov_song(self.states)
+            self.plays = self.states + song[:16]
+
+
 # random.seed(1)
-c = LastChord('C', bpm=120)
+c = Markov('C', bpm=120)
+c.load_states('states.json')
+c.states = c.plays
 c.init()
+c.tick = len(c.states)
 # c = Echo('C', beats_per_measure=16, bpm=120)
 # c.init(delay=4)
 c.start()
