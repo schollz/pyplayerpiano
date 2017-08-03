@@ -188,10 +188,11 @@ class PlayerPiano(object):
         if (self.tick % 16) % 4 == 0:
             # quarter note
             logger.info(self.beat_num)
-            play_notes([(36, 20, 0, True)])
+            # play_notes([(36, 20, 0, True)])
         elif (self.tick % 16) % 2 == 0:
             # eighth note
-            play_notes([(36, 20, 0, False)])
+            pass
+            # play_notes([(36, 20, 0, False)])
         elif (self.tick % 16) % 1 == 0:
             # sixteenth note
             pass
@@ -202,6 +203,7 @@ class PlayerPiano(object):
         play_notes(notes)
         # Play any preset notes
         self.play_preset()
+        self._generate_reply()
         logger.info('silence: {}'.format(self.silence))
         self.silence += 1
         time.sleep(60 / self.bpm / 4 * 0.9975)
@@ -314,20 +316,18 @@ class LastChord(PlayerPiano):
 class Markov(PlayerPiano):
 
     def _generate_reply(self):
-        if len(set(self.states)) > 10 and self.silence > 16:
+        if len(set(self.states)) > 10 and self.silence % 16 == 0 and self.silence > 0:
             logger.info('Generating song')
             song = markov_song(self.states)
             self.plays = self.states + song[:16]
 
 
 # random.seed(1)
-c = Markov('C', bpm=120)
-c.load_states('states.json')
-c.states = c.plays
+c = Markov('C', bpm=240)
+# c.load_states('states.json')
+# c.states = c.plays
 c.init()
-c.tick = len(c.states)
-# c = Echo('C', beats_per_measure=16, bpm=120)
-# c.init(delay=4)
+# c.tick = len(c.states)
 c.start()
 # time.sleep(2)
 # c.add_note(2, 10, 100, 0, True)
