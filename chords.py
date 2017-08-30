@@ -8,8 +8,8 @@ import json
 
 def generate_all_chords():
     all_chords = {}
-    # for c in chords:
-    for c in chord_types['simple']:
+    for c in chords:
+        # for c in chord_types['simple']:
         for note in c_chromatic_scale:
             all_chords[note + c] = get_chord(chords[c], root=note)
 

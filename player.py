@@ -94,6 +94,7 @@ class PlayerPiano(object):
         self.queue = {}
         self.beat_num = 0
         self.tick = -1
+        self.initial_tick = -1
         self.bpm = bpm
         self.silence = 0
 
@@ -102,6 +103,7 @@ class PlayerPiano(object):
         self.t1.start()
         self.t2 = threading.Thread(target=self.midi_listen)
         self.t2.start()
+        self.initial_tick = self.tick
 
     def dump_states(self):
         logger.info("Dumping {} states".format(len(self.states)))
@@ -287,8 +289,8 @@ class LastChord(PlayerPiano):
             velocities.append(velocity)
         if len(set(pitches)) < 3:
             return
-        start = random.randint(3, 8)
-        end = random.randint(3, 8) + start
+        start = random.randint(0, 4)
+        end = random.randint(4, 16) + start
         for i in range(current_absolute + start, current_absolute + end):
             if i in self.queue:
                 return
@@ -316,19 +318,21 @@ class LastChord(PlayerPiano):
 class Markov(PlayerPiano):
 
     def _generate_reply(self):
-        if len(set(self.states)) > 10 and self.silence % 16 == 0 and self.silence > 0:
+        if len(set(self.states)) > 10 and self.silence % 32 == 0 and self.silence > 0 and self.tick > self.initial_tick + 128:
             logger.info('Generating song')
             song = markov_song(self.states)
-            self.plays = self.states + song[:16]
+            self.plays = self.states + song[:32]
+
+
+# c = Markov('C', bpm=360)
+# c.load_states('states.json')
+# c.states = c.plays
+# c.init()
+# c.tick = len(c.states)
+# c.start()
 
 
 # random.seed(1)
-c = Markov('C', bpm=240)
-# c.load_states('states.json')
-# c.states = c.plays
-c.init()
-# c.tick = len(c.states)
-c.start()
 # time.sleep(2)
 # c.add_note(2, 10, 100, 0, True)
 # c.add_note(2, 12, 100, 0, True)
@@ -340,3 +344,8 @@ c.start()
 # c.add_note(9, 50, 100, 0, True)
 # c.add_note(10, 65, 100, 0, True)
 # c.add_note(10, 63, 100, 0, True)
+
+
+c = Echo('C', bpm=240)
+c.init()
+c.start()

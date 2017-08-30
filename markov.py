@@ -7,7 +7,7 @@ import numpy as np
 from easylogging import *
 
 
-def markov_song(a, max_consective_zeros=4):
+def markov_song(a, max_consective_zeros=16):
     new_a = ','.join(str(x) for x in a)
     while '0,' * (max_consective_zeros + 1) in new_a:
         new_a = new_a.replace('0,' * (max_consective_zeros + 1),
