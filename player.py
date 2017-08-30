@@ -211,10 +211,12 @@ class PlayerPiano(object):
         time.sleep(60 / self.bpm / 4 * 0.9975)
 
     def midi_listen(self):
+        print("Starting midi listen")
         going = True
         while going:
             events = event_get()
             for e in events:
+                print(e)
                 if e.type in [QUIT]:
                     print("GOT QUIT")
                     sys.exit(1)
